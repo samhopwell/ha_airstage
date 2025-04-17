@@ -1,4 +1,5 @@
 """Climate platform for Airstage integration."""
+
 from __future__ import annotations
 
 import logging
@@ -67,11 +68,14 @@ HA_FAN_TO_FUJITSU = {
     FAN_AUTO: constants.FanSpeed.AUTO,
 }
 
+
 def ha_swing_to_fujitsu(ha_swing: str) -> constants.VerticalSwingPositions:
     return constants.VerticalSwingPositions(ha_swing)
 
+
 def fujitsu_swing_to_ha(fujitsu_swing: constants.VerticalSwingPositions) -> str:
     return str(fujitsu_swing)
+
 
 SWING_MODES_4 = [
     VERTICAL_SWING,
@@ -110,6 +114,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
+
 async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update listener."""
     await hass.config_entries.async_reload(config_entry.entry_id)
@@ -138,10 +143,14 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
         HVACMode.AUTO,
     ]
 
-    def __init__(self, instance: AirstageData, ac_key: str, config_entry: ConfigEntry) -> None:
+    def __init__(
+        self, instance: AirstageData, ac_key: str, config_entry: ConfigEntry
+    ) -> None:
         """Initialize an AdvantageAir AC unit."""
         super().__init__(instance, ac_key)
-        self._turn_on_before_set_temp = config_entry.options.get(CONF_TURN_ON_BEFORE_SET_TEMP, False)
+        self._turn_on_before_set_temp = config_entry.options.get(
+            CONF_TURN_ON_BEFORE_SET_TEMP, False
+        )
 
     @property
     def target_temperature(self) -> float | None:
@@ -157,12 +166,19 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
-        if self._turn_on_before_set_temp and self.hvac_mode == HVACMode.OFF:
-            await self.async_turn_on()
+        # If the temp is changed and the unit is off, turn it on first
+        if self.hvac_mode == HVACMode.OFF:
+            await self._ac.turn_on()
+            await self._ac.set_operation_mode(HA_STATE_TO_FUJITSU[HVACMode.AUTO])
+            await (
+                self.instance.coordinator.async_refresh()
+            )  # TODO: see if we can update entity
 
-        if self.hvac_mode != HVACMode.FAN_ONLY:
+        if Setelf.hvac_mode != HVACMode.FAN_ONLY:
             await self._ac.set_target_temperature(kwargs.get(ATTR_TEMPERATURE))
-            await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+            await (
+                self.instance.coordinator.async_refresh()
+            )  # TODO: see if we can update entity
 
     @property
     def current_temperature(self) -> float | None:
@@ -217,11 +233,15 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
             else:
                 return PRESET_NONE
         return None
-    
+
     @property
     def preset_modes(self) -> list[str] | None:
         """Return preset modes if supported."""
-        return [PRESET_NONE, MINIMUM_HEAT] if self._ac.get_minimum_heat() is not None else None
+        return (
+            [PRESET_NONE, MINIMUM_HEAT]
+            if self._ac.get_minimum_heat() is not None
+            else None
+        )
 
     async def async_update(self) -> None:
         """Retrieve latest state."""
@@ -230,12 +250,16 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
     async def async_turn_on(self) -> None:
         """Set the HVAC State to on."""
         await self._ac.turn_on()
-        await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+        await (
+            self.instance.coordinator.async_refresh()
+        )  # TODO: see if we can update entity
 
     async def async_turn_off(self) -> None:
         """Set the HVAC State to off."""
         await self._ac.turn_off()
-        await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+        await (
+            self.instance.coordinator.async_refresh()
+        )  # TODO: see if we can update entity
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set the HVAC Mode and State."""
@@ -246,19 +270,25 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
             if self._ac.get_device_on_off_state() == constants.BooleanDescriptors.OFF:
                 await self._ac.turn_on()
             await self._ac.set_operation_mode(HA_STATE_TO_FUJITSU[hvac_mode])
-        await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+        await (
+            self.instance.coordinator.async_refresh()
+        )  # TODO: see if we can update entity
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set the Fan Mode."""
         await self._ac.set_fan_speed(HA_FAN_TO_FUJITSU[fan_mode])
-        await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+        await (
+            self.instance.coordinator.async_refresh()
+        )  # TODO: see if we can update entity
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         if swing_mode == VERTICAL_SWING:
             await self._ac.set_vertical_swing(constants.BooleanProperty.ON)
         else:
             await self._ac.set_vertical_direction(ha_swing_to_fujitsu(swing_mode))
-        await self.instance.coordinator.async_refresh()  # TODO: see if we can update entity
+        await (
+            self.instance.coordinator.async_refresh()
+        )  # TODO: see if we can update entity
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         if preset_mode == MINIMUM_HEAT:
@@ -273,9 +303,11 @@ class AirstageAC(AirstageAcEntity, ClimateEntity):
         supported_features = ClimateEntityFeature.FAN_MODE
 
         # if self.hvac_mode != HVACMode.FAN_ONLY and int(self._ac.get_target_temperature()) < 6553:
-        supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE \
-            | ClimateEntityFeature.TURN_OFF \
+        supported_features |= (
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_OFF
             | ClimateEntityFeature.TURN_ON
+        )
 
         if self.preset_mode:
             supported_features |= ClimateEntityFeature.PRESET_MODE
